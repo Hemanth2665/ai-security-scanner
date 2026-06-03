@@ -1,4 +1,6 @@
 import re
+import sys
+from pathlib import Path
 
 
 PROMPT_INJECTION_PATTERNS = [
@@ -66,8 +68,7 @@ def scan_text(text: str) -> dict:
             })
             risk_score += 15
 
-    if risk_score > 100:
-        risk_score = 100
+    risk_score = min(risk_score, 100)
 
     if risk_score >= 80:
         overall = "Critical"
@@ -87,7 +88,58 @@ def scan_text(text: str) -> dict:
     }
 
 
+def scan_file(file_path: str) -> dict:
+    path = Path(file_path)
+
+    if not path.exists():
+        return {
+            "error": f"File not found: {file_path}"
+        }
+
+    if not path.is_file():
+        return {
+            "error": f"Not a file: {file_path}"
+        }
+
+    text = path.read_text(errors="ignore")
+    result = scan_text(text)
+    result["file"] = str(path)
+    return result
+
+
+def print_report(result: dict):
+    print("\n===== AI SECURITY SCAN REPORT =====")
+
+    if "error" in result:
+        print(f"Error: {result['error']}")
+        print("===================================")
+        return
+
+    if "file" in result:
+        print(f"File       : {result['file']}")
+
+    print(f"Risk Score : {result['risk_score']}/100")
+    print(f"Risk Level : {result['overall_risk']}")
+    print()
+
+    if result["findings"]:
+        print("Findings:")
+        for index, finding in enumerate(result["findings"], start=1):
+            print(f"{index}. Type     : {finding['type']}")
+            print(f"   Severity : {finding['severity']}")
+            print(f"   Pattern  : {finding['pattern']}")
+            print()
+    else:
+        print("No threats detected.")
+
+    print("===================================")
+
+
 if __name__ == "__main__":
-    sample = input("Enter text to scan: ")
-    result = scan_text(sample)
-    print(result)
+    if len(sys.argv) > 1:
+        result = scan_file(sys.argv[1])
+    else:
+        sample = input("Enter text to scan: ")
+        result = scan_text(sample)
+
+    print_report(result)
